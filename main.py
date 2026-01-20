@@ -56,33 +56,36 @@ def get_global_data():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 # ============================================================
-# 🧱 On-Chain Data via CryptoQuant (BTC, ETH etc.)
+# 🧱 On-Chain & Market Data via CoinStats (BTC, ETH etc.)
 # ============================================================
 
 @app.get("/api/onchain/{symbol}")
-def get_onchain_data(symbol: str):
+def get_onchain(symbol: str):
     try:
-        # CryptoQuant bietet öffentliche On-Chain-Daten an
         symbol = symbol.upper()
+        url = f"https://api.coinstats.app/public/v1/coins/{symbol.lower()}"
+        response = requests.get(url)
+        data = response.json()
 
-        # Beispielhafte Kernmetriken
-        endpoints = {
-            "realized_cap": f"https://api.cryptoquant.com/v1/{symbol.lower()}-market/realized-cap",
-            "sopr": f"https://api.cryptoquant.com/v1/{symbol.lower()}-market/sopr",
-            "nupl": f"https://api.cryptoquant.com/v1/{symbol.lower()}-market/nupl"
+        if "coin" not in data:
+            return {"status": "error", "message": "Coin not found or invalid symbol"}
+
+        coin = data["coin"]
+
+        result = {
+            "name": coin.get("name"),
+            "symbol": coin.get("symbol"),
+            "price_usd": coin.get("price"),
+            "market_cap_usd": coin.get("marketCap"),
+            "volume_24h_usd": coin.get("volume"),
+            "available_supply": coin.get("availableSupply"),
+            "total_supply": coin.get("totalSupply"),
+            "price_change_1d": coin.get("priceChange1d"),
+            "price_change_1w": coin.get("priceChange1w"),
+            "explorers": coin.get("explorers")
         }
 
-        results = {}
-        for key, url in endpoints.items():
-            r = requests.get(url)
-            if r.status_code == 200:
-                data = r.json()
-                # Nur letzte 10 Werte behalten, um Antwort kompakt zu halten
-                results[key] = data[-10:] if isinstance(data, list) else data
-            else:
-                results[key] = {"error": f"Request failed: {r.status_code}"}
-
-        return {"status": "ok", "symbol": symbol, "data": results}
+        return {"status": "ok", "data": result}
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
