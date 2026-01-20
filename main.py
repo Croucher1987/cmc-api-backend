@@ -132,4 +132,44 @@ def get_dashboard(symbol: str):
         cmc_url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
         headers = {"X-CMC_PRO_API_KEY": CMC_KEY}
         params = {"symbol": symbol}
-        cmc_data = requests._
+        cmc_data = requests.get(cmc_url, headers=headers, params=params).json()
+        coin = cmc_data["data"][symbol]["quote"]["USD"]
+
+        # --- Global Metrics
+        global_url = "https://pro-api.coinmarketcap.com/v1/global-metrics/quotes/latest"
+        global_data = requests.get(global_url, headers=headers).json()["data"]["quote"]["USD"]
+
+        # --- On-Chain via CoinStats
+        id_map = {
+            "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
+            "BNB": "binance-coin", "XRP": "ripple", "ADA": "cardano",
+            "DOGE": "dogecoin", "AVAX": "avalanche-2", "DOT": "polkadot"
+        }
+        coin_id = id_map.get(symbol, symbol.lower())
+        cs_url = f"https://api.coinstats.app/public/v1/coins/{coin_id}"
+        cs_data = requests.get(cs_url).json().get("coin", {})
+
+        return {
+            "status": "ok",
+            "symbol": symbol,
+            "data": {
+                "price_usd": coin.get("price"),
+                "change_24h_percent": coin.get("percent_change_24h"),
+                "volume_24h_usd": coin.get("volume_24h"),
+                "market_cap_usd": coin.get("market_cap"),
+                "global": {
+                    "total_market_cap_usd": global_data.get("total_market_cap"),
+                    "btc_dominance_percent": global_data.get("btc_dominance"),
+                    "eth_dominance_percent": global_data.get("eth_dominance")
+                },
+                "onchain": {
+                    "available_supply": cs_data.get("availableSupply"),
+                    "total_supply": cs_data.get("totalSupply"),
+                    "price_change_1d": cs_data.get("priceChange1d"),
+                    "price_change_1w": cs_data.get("priceChange1w")
+                }
+            }
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
