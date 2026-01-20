@@ -173,3 +173,42 @@ def get_dashboard(symbol: str):
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+        
+# ============================================================
+# 💹 5️⃣ Multi-Coin Endpoint – Top 100 Coins (dynamisch)
+# ============================================================
+
+@app.get("/api/multi")
+def get_multi(limit: int = 100):
+    """
+    Gibt Marktdaten für mehrere Coins gleichzeitig zurück.
+    Optionaler Parameter ?limit=10 (Standard = 100)
+    """
+    try:
+        CMC_KEY = os.getenv("CMC_KEY")
+        url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+        headers = {"X-CMC_PRO_API_KEY": CMC_KEY}
+        params = {"start": 1, "limit": limit, "convert": "USD"}
+
+        response = requests.get(url, headers=headers, params=params)
+        data = response.json()
+
+        if "data" not in data:
+            return {"status": "error", "message": "Invalid response from API"}
+
+        result = []
+        for coin in data["data"]:
+            result.append({
+                "rank": coin.get("cmc_rank"),
+                "name": coin.get("name"),
+                "symbol": coin.get("symbol"),
+                "price_usd": round(coin["quote"]["USD"]["price"], 4),
+                "volume_24h_usd": round(coin["quote"]["USD"]["volume_24h"], 2),
+                "change_24h_percent": round(coin["quote"]["USD"]["percent_change_24h"], 2),
+                "market_cap_usd": round(coin["quote"]["USD"]["market_cap"], 2)
+            })
+
+        return {"status": "ok", "total": len(result), "data": result}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
