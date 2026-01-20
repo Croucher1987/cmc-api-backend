@@ -212,3 +212,77 @@ def get_multi(limit: int = 100):
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ============================================================
+# 🧱 Derivate Endpoint – Coinglass (Funding, OI, Liquidations)
+# ============================================================
+
+@app.get("/api/derivatives/{symbol}")
+def get_derivatives(symbol: str):
+    """
+    Liefert Funding Rate, Open Interest & Liquidations für das Symbol.
+    Quelle: Coinglass API
+    """
+    try:
+        COINGLASS_KEY = os.getenv("COINGLASS_API_KEY")
+        base_url = "https://open-api.coinglass.com/api/pro/v1"
+        headers = {"coinglassSecret": COINGLASS_KEY}
+        symbol = symbol.upper()
+
+        # Funding Rates
+        funding_url = f"{base_url}/futures/funding_rates?symbol={symbol}"
+        funding_data = requests.get(funding_url, headers=headers).json()
+
+        # Open Interest
+        oi_url = f"{base_url}/futures/openInterest?symbol={symbol}"
+        oi_data = requests.get(oi_url, headers=headers).json()
+
+        # Liquidations
+        liq_url = f"{base_url}/futures/liquidation_chart?symbol={symbol}"
+        liq_data = requests.get(liq_url, headers=headers).json()
+
+        result = {
+            "symbol": symbol,
+            "funding_rate": funding_data.get("data", [{}])[0].get("fundingRate"),
+            "funding_rate_avg_24h": funding_data.get("data", [{}])[0].get("fundingRate24hAvg"),
+            "open_interest_usd": oi_data.get("data", {}).get("openInterest"),
+            "open_interest_change_24h": oi_data.get("data", {}).get("openInterestChange24h"),
+            "liquidations_long_usd": liq_data.get("data", {}).get("longVolUsd"),
+            "liquidations_short_usd": liq_data.get("data", {}).get("shortVolUsd"),
+            "liquidations_total_usd": liq_data.get("data", {}).get("totalVolUsd")
+        }
+
+        return {"status": "ok", "data": result}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ============================================================
+# 💬 Sentiment Endpoint – Fear & Greed Index (Alternative.me)
+# ============================================================
+
+@app.get("/api/sentiment")
+def get_sentiment():
+    """
+    Liefert den aktuellen Fear & Greed Index (0–100).
+    Quelle: https://api.alternative.me/fng/
+    """
+    try:
+        url = "https://api.alternative.me/fng/?limit=1"
+        response = requests.get(url).json()
+
+        if "data" not in response:
+            return {"status": "error", "message": "Invalid response from API"}
+
+        data = response["data"][0]
+        result = {
+            "value": int(data["value"]),
+            "classification": data["value_classification"],
+            "timestamp": data["timestamp"]
+        }
+
+        return {"status": "ok", "data": result}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
