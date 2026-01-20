@@ -286,3 +286,132 @@ def get_sentiment():
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ============================================================
+# 💵 Macro Endpoint – DXY, Nasdaq, Gold, VIX (Public APIs)
+# ============================================================
+
+@app.get("/api/macro")
+def get_macro():
+    """
+    Liefert aktuelle Makrodaten:
+    - DXY (US-Dollar-Index)
+    - NASDAQ 100
+    - Goldpreis (USD)
+    - VIX (Volatilitätsindex)
+    Quelle: Yahoo Finance (public JSON endpoints)
+    """
+    try:
+        assets = {
+            "DXY": "DX-Y.NYB",
+            "NASDAQ": "^NDX",
+            "GOLD": "GC=F",
+            "VIX": "^VIX"
+        }
+
+        results = {}
+
+        for key, ticker in assets.items():
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+            r = requests.get(url).json()
+            data = r.get("chart", {}).get("result", [{}])[0]
+            meta = data.get("meta", {})
+            results[key] = {
+                "symbol": ticker,
+                "price": meta.get("regularMarketPrice"),
+                "currency": meta.get("currency"),
+                "exchange": meta.get("exchangeName"),
+                "timestamp": meta.get("regularMarketTime")
+            }
+
+        return {"status": "ok", "data": results}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ============================================================
+# 🧩 Erweiterung: Logging, Caching & Extended Dashboard
+# ============================================================
+
+import logging
+from functools import lru_cache
+import time
+
+# ------------------------------------------------------------
+# 🧠 (A) Logging – zeigt jede Anfrage im Render-Log
+# ------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    logging.info(f"📩 Request: {request.method} {request.url}")
+    start_time = time.time()
+    response = await call_next(request)
+    duration = round(time.time() - start_time, 2)
+    logging.info(f"📤 Response: {response.status_code} in {duration}s")
+    return response
+
+
+# ------------------------------------------------------------
+# ⚡ (B) Cache – vermeidet wiederholte API-Abfragen (1 Minütig)
+# ------------------------------------------------------------
+CACHE_TTL = 60  # Sekunden
+_cache_store = {}
+
+def cache_get(key):
+    """Gibt gespeicherte Daten zurück, wenn noch gültig."""
+    entry = _cache_store.get(key)
+    if entry and (time.time() - entry["time"]) < CACHE_TTL:
+        return entry["data"]
+    return None
+
+def cache_set(key, data):
+    """Speichert Daten mit aktuellem Zeitstempel."""
+    _cache_store[key] = {"data": data, "time": time.time()}
+
+
+# ------------------------------------------------------------
+# 📊 (C) Extended Dashboard Endpoint
+# ------------------------------------------------------------
+@app.get("/api/dashboard/extended/{symbol}")
+def get_extended_dashboard(symbol: str):
+    """
+    Kombiniert technische, Derivate-, Sentiment- und Makro-Daten
+    zu einem vollständigen Marktüberblick.
+    """
+    try:
+        symbol = symbol.upper()
+
+        # Prüfen, ob im Cache
+        cache_key = f"extended_{symbol}"
+        cached = cache_get(cache_key)
+        if cached:
+            return {"status": "ok", "cached": True, "data": cached}
+
+        # --- Datenquellen abrufen
+        price_data = get_price(symbol)
+        global_data = get_global()
+        onchain_data = get_onchain(symbol)
+        derivatives_data = get_derivatives(symbol)
+        sentiment_data = get_sentiment()
+        macro_data = get_macro()
+
+        combined = {
+            "symbol": symbol,
+            "timestamp": int(time.time()),
+            "price": price_data.get("data", {}),
+            "global": global_data.get("data", {}),
+            "onchain": onchain_data.get("data", {}),
+            "derivatives": derivatives_data.get("data", {}),
+            "sentiment": sentiment_data.get("data", {}),
+            "macro": macro_data.get("data", {})
+        }
+
+        # Im Cache speichern
+        cache_set(cache_key, combined)
+
+        return {"status": "ok", "cached": False, "data": combined}
+
+    except Exception as e:
+        logging.error(f"❌ Extended Dashboard Error: {e}")
+        return {"status": "error", "message": str(e)}
