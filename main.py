@@ -56,14 +56,31 @@ def get_global_data():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 # ============================================================
-# 🧱 On-Chain & Market Data via CoinStats (BTC, ETH etc.)
+# 🧱 On-Chain & Market Data via CoinStats (geprüft)
 # ============================================================
 
 @app.get("/api/onchain/{symbol}")
 def get_onchain(symbol: str):
     try:
         symbol = symbol.upper()
-        url = f"https://api.coinstats.app/public/v1/coins/{symbol.lower()}"
+
+        # Mapping Symbol → Coin-ID laut CoinStats
+        id_map = {
+            "BTC": "bitcoin",
+            "ETH": "ethereum",
+            "SOL": "solana",
+            "BNB": "binance-coin",
+            "XRP": "ripple",
+            "ADA": "cardano",
+            "DOGE": "dogecoin",
+            "AVAX": "avalanche-2",
+            "DOT": "polkadot",
+            "MATIC": "matic-network"
+        }
+
+        coin_id = id_map.get(symbol, symbol.lower())
+        url = f"https://api.coinstats.app/public/v1/coins/{coin_id}"
+
         response = requests.get(url)
         data = response.json()
 
@@ -89,3 +106,4 @@ def get_onchain(symbol: str):
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
